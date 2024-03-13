@@ -1,0 +1,229 @@
+---
+title: "Noções Básicas de Técnicas Contábeis e Financeiras com o R"
+subtitle: "CINCO - I Congresso Interinstitucional de Contabilidade e Controladoria"
+author: "Kléber Formiga Miranda (UFERSA)"
+categories: [Financas, R, Apostila]
+date: "2023-12-14"
+# output: html_document
+# ver https://bookdown.org/yihui/rmarkdown/html-document.html#appearance-and-style
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: spacelab
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+lang: pt
+image: "images/cinco.png"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+
+```{r, include=FALSE}
+
+# setwd("D:/repos/projects/presentationCINCO")
+
+library(readxl)
+library(tidyverse)
+
+dt_Planilha <-
+  read_xlsx("data/dtContabil.xlsx", sheet = "contas_CINCO",
+            col_types = c("text", "text", "date", rep("numeric", 20))) %>% 
+  dplyr::select(-Setor_Atividade) %>% 
+  mutate(
+    DT_REFER = as.Date(DT_REFER)
+  )
+
+```
+
+## Análise Horizontal
+
+Preciso fazer uma análise horizontal da receita bruta do ano de 2019 em relação ao ano de 2018. A gestão pretende avaliar como se deu o aumento da receita bruta de sua empresa em relação às demais.
+
+```{r dados}
+
+# Carrega a base de dados
+dt_Planilha %>% 
+  # Seleciona as contas de interesse
+  select(
+    CD_CVM, DT_REFER, receitaBruta
+    ) %>% 
+  # Transformar a data em anos, considerando que o ano está nos 4 primeiros caracteres
+  mutate(
+    ano = substr(DT_REFER, 1, 4)
+  ) %>% 
+  # Colocando o banco em ordem de empresa e ano
+  arrange(
+    CD_CVM, ano
+    ) %>% 
+  # Filtrando apenas os anos 2018 e 2019
+  filter(
+    ano %in% c("2018", "2019")
+  ) %>% 
+  # Como a análise é por empresa, precisamos agrupar o banco por empresa
+  group_by(
+    CD_CVM
+    ) %>% 
+  # Calculando a variação da receita bruta (análise horizontal)
+  mutate(
+    ah_RecBruta = receitaBruta / lag(receitaBruta) - 1
+  ) %>%
+  # Como deveremos perder os dados de 2018, vamos filtrar apenas o ano de 2019
+  filter(
+    ano == "2019"
+  ) %>% 
+  # Como algumas empresas não possuiam o ano de 2018, apresentou NA
+  # Vamos remover os valores não disponíveis (NA)
+  na.omit() %>% 
+  # Vamos colocar a análise horizontal em ordem decrescente
+  arrange(
+    desc(
+      ah_RecBruta
+    )
+  ) %>% 
+  # Seleciona as colunas (variáveis) de interesse
+  select(CD_CVM, ano, receitaBruta, ah_RecBruta) %>% 
+  # Formata Tabela
+  kableExtra::kbl(
+    caption = "Análise Horizontal da receita bruta das empresas", 
+    col.names = c("Código", "Ano", "Receita Bruta", "AH Receita Bruta"),
+    digits = 2
+    ) %>% 
+  # Usa tema padrão (ajustável)
+  kableExtra::kable_styling() %>% 
+  # Destaca a linha de interesse (poderia ser coluna - outra função (colum_spec))
+  # Ver https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html
+  kableExtra::row_spec(
+    row = 4, 
+    bold = T, 
+    color = "blue",
+    background = "yellow"
+    )
+    
+```
+
+Vimos que a empresa com código da CVM 24473 apresentou, em 2019, um crescimento de receita bruta de 2019 de 1,98 vezes em relação à receita bruta de 2018. Assim, a análise horizontal demonstrou um crescimento de 198% em relação à 2018. Portanto, a empresa....
+
+## Análise Vertical
+
+A empresa quer saber se o valor que ela deixou investido em caixa e equivalentes, no ano de 2019, está compatível com as demais empresas do setor.
+
+```{r, echo=FALSE}
+
+# Carrega a base de dados
+dt_Planilha %>% 
+  # Seleciona as variáveis (colunas) de interesse
+  select(
+    CD_CVM, DT_REFER, caixaEquivCx, ativoTotal
+  ) %>% 
+  # Selecionar as variáveis de interesse e fazendo as alterações ao mesmo tempo
+  transmute(
+    codigo = CD_CVM,
+    ano = substr(DT_REFER, 1, 4),
+    av_CaixaEquiv = caixaEquivCx / ativoTotal
+  ) %>% 
+  filter(
+    ano == 2019
+  ) %>% 
+  arrange(
+    desc(
+      av_CaixaEquiv
+    )
+  ) %>% 
+  # Ajusta tabela
+    kableExtra::kbl(
+    caption = "Análise Vertical da conta caixa e equivalente de caixa das empresas", 
+    col.names = c("Código", "Ano", "AV Caixa e Equivalentes"),
+    digits = 2
+    ) %>% 
+  # Usa tema padrão (ajustável)
+  kableExtra::kable_styling() %>% 
+  # Destaca a linha de interesse (poderia ser coluna - outra função (colum_spec))
+  # Ver https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html
+  kableExtra::row_spec(
+    row = 20, 
+    bold = T, 
+    color = "blue",
+    background = "yellow"
+    )
+
+  
+```
+
+Vimos que a empresa que teve maior crescimento de receita também é a empresa que menos investiu em caixa e equivalentes de caixa, conforme informação de 31/12/2019.
+
+## Crição de indicador (Giro do Ativo)
+
+Vamos identificar qual o Giro do Ativo de todas as empresas constantes na base de dados para avaliar como se comporta a nossa empresa (20494)
+
+```{r, echo=FALSE}
+
+dt_Indicador <-
+  dt_Planilha %>% 
+  transmute(
+    CD_CVM,
+    ano = factor(as.numeric(substr(DT_REFER, 1, 4))),
+    ebit,
+    giroAtivo = receitaLiquida / ativoTotal
+  ) %>% 
+  na.omit()
+
+
+dt_Indicador %>% 
+  # Ajusta tabela
+    kableExtra::kbl(
+    caption = "Giro do ativo das empresas", 
+    col.names = c("Código", "Ano", "EBIT", "Giro do Ativo"),
+    digits = 2
+    ) %>% 
+  # Usa tema padrão (ajustável)
+  kableExtra::kable_styling() 
+
+
+```
+
+A tabela é imensa e temos muitos dados. De fato, não ficou sugestivo. Vamos tentar por meio de gráfico.
+
+## Visualização Gráfica (Geral)
+
+Inicialmente, vamos plotar os valores de giro do ativo, por ano, considerando o valor do ebit. Poderemos avaliar o giro do no tempo e conforme o valor do EBIT.
+
+```{r, echo=FALSE}
+
+dt_Indicador %>% 
+  ggplot(
+    aes(ano, giroAtivo, size = ebit, col = ebit)
+  ) +
+  geom_point()
+```
+
+O gráfico consegue demonstrar e nos dar insights, contudo, não consigo avaliar a empresa 20494.
+
+## Visualização Gráfica (Empresa)
+
+Vamos repetir o mesmo gráfico com algumas customizações, adicionando a identificação da empresa 20494.
+
+```{r, echo=FALSE}
+
+dt_Indicador %>% 
+  ggplot(
+    aes(ano, giroAtivo, size = ebit)
+  ) +
+  geom_point() +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Giro do Ativo da empresa 20494 vs demais",
+    subtitle = "Apresentação para diretoria",
+    caption = "Autores") +
+  xlab("Ano") + ylab("Giro do Ativo") +
+  gghighlight::gghighlight(CD_CVM == "20494", use_direct_label = FALSE)
+
+```
+
+O gráfico nos mostra que a empresa 20494 possui valores de giro do ativo, assim como valores de ebit, entre os menores da amostra. Esse valor é persistente no tempo.

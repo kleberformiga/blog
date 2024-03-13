@@ -1,0 +1,4 @@
+- source: project
+  quarto-pub:
+    - id: 0bcb5554-c72e-4b8e-8a85-afb2208e8847
+      url: 'https://kleberformiga.quarto.pub/blog'
